@@ -9,6 +9,7 @@ import customerRoutes from './routes/customers';
 import churnRoutes from './routes/churn';
 import analyticsRoutes from './routes/analytics';
 import interventionRoutes from './routes/interventions';
+import taskRoutes from './routes/tasks';
 import { authenticateToken } from './middleware/auth';
 import { initializeDatabase } from './services/database';
 import { setupWebSocket } from './services/websocket';
@@ -33,6 +34,7 @@ app.use('/api/customers', authenticateToken, customerRoutes);
 app.use('/api/churn', authenticateToken, churnRoutes);
 app.use('/api/analytics', authenticateToken, analyticsRoutes);
 app.use('/api/interventions', authenticateToken, interventionRoutes);
+app.use('/api/tasks', authenticateToken, taskRoutes);
 
 const server = createServer(app);
 

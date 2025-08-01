@@ -35,23 +35,23 @@ import {
 import {
   Users,
   TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
   Phone,
   Mail,
   MessageSquare,
   Target,
-  Calendar,
+  Clock,
+  CheckCircle,
+  AlertTriangle
 } from 'lucide-react';
 
 const CSMDashboard: React.FC = () => {
   const { user } = useAuth();
   const [assignedCustomers, setAssignedCustomers] = useState<any[]>([]);
   const [interventions, setInterventions] = useState<any[]>([]);
-  const [metrics, setMetrics] = useState<any>(null);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [csmMetrics, setCsmMetrics] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('customers');
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [interventionForm, setInterventionForm] = useState({
     intervention_type: '',
@@ -66,19 +66,21 @@ const CSMDashboard: React.FC = () => {
   const loadCSMData = async () => {
     try {
       setIsLoading(true);
-      const [customersRes, interventionsRes, metricsRes] = await Promise.all([
+      const [customersRes, interventionsRes, tasksRes, metricsRes] = await Promise.all([
         apiService.getCustomers({ limit: 100 }),
-        apiService.getInterventions({ assigned_to: user?.name || '', limit: 50 }),
-        apiService.getDashboardOverview(),
+        apiService.getInterventions({ assigned_to: user?.name || 'Customer Success Manager', limit: 50 }),
+        apiService.getTasks({ assigned_to: user?.name || 'Customer Success Manager', limit: 50 }),
+        apiService.getCSMMetrics(user?.name || 'Customer Success Manager'),
       ]);
 
       const assigned = customersRes.customers?.filter((c: any) => 
-        c.customer_success_manager === user?.name
+        c.customer_success_manager === (user?.name || 'Customer Success Manager')
       ) || [];
       
       setAssignedCustomers(assigned);
       setInterventions(interventionsRes.interventions || []);
-      setMetrics(metricsRes);
+      setTasks(tasksRes.tasks || []);
+      setCsmMetrics(metricsRes);
     } catch (error) {
       console.error('Failed to load CSM data:', error);
     } finally {
@@ -96,7 +98,7 @@ const CSMDashboard: React.FC = () => {
         customer_id: selectedCustomer.id,
         intervention_type: interventionForm.intervention_type,
         trigger_reason: interventionForm.trigger_reason,
-        assigned_to: user?.name || '',
+        assigned_to: user?.name || 'Customer Success Manager',
         notes: interventionForm.notes,
       });
 
@@ -106,9 +108,18 @@ const CSMDashboard: React.FC = () => {
         notes: '',
       });
       setSelectedCustomer(null);
-      loadCSMData(); // Refresh data
+      loadCSMData();
     } catch (error) {
       console.error('Failed to create intervention:', error);
+    }
+  };
+
+  const handleTaskUpdate = async (taskId: string, updates: any) => {
+    try {
+      await apiService.updateTask(taskId, updates);
+      loadCSMData();
+    } catch (error) {
+      console.error('Error updating task:', error);
     }
   };
 
@@ -169,11 +180,12 @@ const CSMDashboard: React.FC = () => {
   const atRiskCustomers = assignedCustomers.filter(c => 
     c.churn_risk_level === 'high' || c.churn_risk_level === 'critical'
   );
-  const totalARR = assignedCustomers.reduce((sum, c) => sum + (c.mrr * 12), 0);
-  const avgHealthScore = assignedCustomers.length > 0 
+  const totalARR = csmMetrics?.total_arr_responsibility || assignedCustomers.reduce((sum, c) => sum + (c.mrr * 12), 0);
+  const avgHealthScore = csmMetrics?.average_customer_health || (assignedCustomers.length > 0 
     ? Math.round(assignedCustomers.reduce((sum, c) => sum + c.health_score, 0) / assignedCustomers.length)
-    : 0;
-  const activeInterventions = interventions.filter(i => i.status === 'in_progress').length;
+    : 0);
+  const activeInterventions = csmMetrics?.active_interventions || interventions.filter(i => i.status === 'in_progress').length;
+  const interventionSuccessRate = csmMetrics?.intervention_success_rate || 87;
 
   return (
     <div className="space-y-6">
@@ -185,7 +197,7 @@ const CSMDashboard: React.FC = () => {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{assignedCustomers.length}</div>
+            <div className="text-2xl font-bold">{csmMetrics?.customers_managed || assignedCustomers.length}</div>
             <p className="text-xs text-muted-foreground">
               {atRiskCustomers.length} at risk
             </p>
@@ -200,7 +212,7 @@ const CSMDashboard: React.FC = () => {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalARR)}</div>
             <p className="text-xs text-muted-foreground">
-              Avg health: {avgHealthScore}
+              At risk: {formatCurrency(csmMetrics?.at_risk_arr || 0)}
             </p>
           </CardContent>
         </Card>
@@ -213,7 +225,7 @@ const CSMDashboard: React.FC = () => {
           <CardContent>
             <div className="text-2xl font-bold">{activeInterventions}</div>
             <p className="text-xs text-muted-foreground">
-              {interventions.length} total this month
+              {csmMetrics?.capacity_utilization || 85}% capacity
             </p>
           </CardContent>
         </Card>
@@ -224,7 +236,7 @@ const CSMDashboard: React.FC = () => {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">87%</div>
+            <div className="text-2xl font-bold text-green-600">{interventionSuccessRate}%</div>
             <p className="text-xs text-muted-foreground">
               Intervention success rate
             </p>
@@ -234,9 +246,9 @@ const CSMDashboard: React.FC = () => {
 
       <Tabs defaultValue="customers" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="customers">My Customers</TabsTrigger>
-          <TabsTrigger value="interventions">Interventions</TabsTrigger>
-          <TabsTrigger value="tasks">Task Queue</TabsTrigger>
+          <TabsTrigger value="customers">My Customers ({assignedCustomers.length})</TabsTrigger>
+          <TabsTrigger value="interventions">Interventions ({activeInterventions})</TabsTrigger>
+          <TabsTrigger value="tasks">Task Queue ({tasks.filter(t => t.status !== 'completed').length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="customers" className="space-y-4">
@@ -395,13 +407,29 @@ const CSMDashboard: React.FC = () => {
                 <TableBody>
                   {interventions.slice(0, 10).map((intervention) => {
                     const customer = assignedCustomers.find(c => c.id === intervention.customer_id);
+                    const successProbability = intervention.success_probability;
+                    const estimatedHours = intervention.estimated_time_hours;
                     return (
                       <TableRow key={intervention.id}>
                         <TableCell className="font-medium">
-                          {customer?.company_name || 'Unknown Customer'}
+                          <div className="flex flex-col">
+                            <span>{customer?.company_name || 'Unknown Customer'}</span>
+                            {successProbability && (
+                              <span className="text-xs text-muted-foreground">
+                                {successProbability}% success probability
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="capitalize">
-                          {intervention.intervention_type.replace('_', ' ')}
+                          <div className="flex flex-col">
+                            <span>{intervention.intervention_type.replace('_', ' ')}</span>
+                            {estimatedHours && (
+                              <span className="text-xs text-muted-foreground">
+                                {estimatedHours}h/week
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge variant={getStatusBadgeVariant(intervention.status)}>
@@ -437,52 +465,82 @@ const CSMDashboard: React.FC = () => {
             <CardHeader>
               <CardTitle>Task Queue</CardTitle>
               <CardDescription>
-                Recommended actions and follow-ups
+                Prioritized tasks and follow-ups for your customer portfolio
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {atRiskCustomers.slice(0, 5).map((customer) => (
-                  <div key={customer.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
-                    <div>
-                      <p className="font-medium text-red-900">
-                        {customer.churn_risk_level === 'critical' ? 'URGENT: ' : 'HIGH PRIORITY: '}
-                        {customer.company_name}
-                      </p>
-                      <p className="text-sm text-red-700">
-                        Health score: {customer.health_score} - Immediate intervention required
-                      </p>
+                {tasks.map((task) => {
+                  const priorityColors = {
+                    critical: 'bg-red-50 border-red-200',
+                    high: 'bg-yellow-50 border-yellow-200',
+                    medium: 'bg-blue-50 border-blue-200',
+                    low: 'bg-gray-50 border-gray-200'
+                  };
+                  
+                  const priorityBadgeColors = {
+                    critical: 'destructive',
+                    high: 'secondary',
+                    medium: 'outline',
+                    low: 'outline'
+                  };
+                  
+                  const isOverdue = new Date(task.due_date) < new Date();
+                  const dueDate = new Date(task.due_date);
+                  const isToday = dueDate.toDateString() === new Date().toDateString();
+                  
+                  let dueDateText = dueDate.toLocaleDateString();
+                  if (isToday) {
+                    dueDateText = `Today ${dueDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                  } else if (dueDate.getTime() - new Date().getTime() < 7 * 24 * 60 * 60 * 1000) {
+                    dueDateText = dueDate.toLocaleDateString([], { weekday: 'long' });
+                  }
+                  
+                  return (
+                    <div key={task.id} className={`flex items-center justify-between p-3 rounded-lg border ${priorityColors[task.priority as keyof typeof priorityColors]}`}>
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <p className="font-medium text-gray-900">{task.title}</p>
+                          <Badge variant={priorityBadgeColors[task.priority as keyof typeof priorityBadgeColors] as any}>
+                            {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-1">
+                          Due: {dueDateText} {isOverdue && <span className="text-red-600 font-medium">(Overdue)</span>}
+                        </p>
+                        <p className="text-sm text-gray-500">{task.customer_name} • {task.estimated_time_hours}h estimated</p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {task.status === 'pending' && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleTaskUpdate(task.id, { status: 'in_progress' })}
+                          >
+                            Start
+                          </Button>
+                        )}
+                        {task.status === 'in_progress' && (
+                          <Button 
+                            size="sm" 
+                            onClick={() => handleTaskUpdate(task.id, { status: 'completed' })}
+                          >
+                            Complete
+                          </Button>
+                        )}
+                        {task.status === 'completed' && (
+                          <Badge variant="default">Completed</Badge>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex space-x-2">
-                      <Button size="sm" variant="destructive">
-                        <Phone className="h-3 w-3 mr-1" />
-                        Call Now
-                      </Button>
-                      <Button size="sm" variant="outline">
-                        <Calendar className="h-3 w-3 mr-1" />
-                        Schedule
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 
-                {assignedCustomers
-                  .filter(c => c.churn_risk_level === 'medium')
-                  .slice(0, 3)
-                  .map((customer) => (
-                  <div key={customer.id} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <div>
-                      <p className="font-medium text-yellow-900">Check-in: {customer.company_name}</p>
-                      <p className="text-sm text-yellow-700">
-                        Health score: {customer.health_score} - Regular check-in recommended
-                      </p>
-                    </div>
-                    <Button size="sm" variant="outline">
-                      <Mail className="h-3 w-3 mr-1" />
-                      Send Email
-                    </Button>
+                {tasks.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    No tasks assigned. All caught up!
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>

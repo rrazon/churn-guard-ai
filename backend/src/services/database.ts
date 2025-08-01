@@ -1,4 +1,4 @@
-import { Customer, User, UsageMetric, ChurnPrediction, Intervention } from '../types';
+import { Customer, User, UsageMetric, ChurnPrediction, Intervention, Task } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 
@@ -7,21 +7,19 @@ export const database = {
   customers: [] as Customer[],
   usageMetrics: [] as UsageMetric[],
   churnPredictions: [] as ChurnPrediction[],
-  interventions: [] as Intervention[]
+  interventions: [] as Intervention[],
+  tasks: [] as Task[]
 };
 
 export function initializeDatabase() {
   console.log('🗄️ Initializing in-memory database...');
   
   createDemoUsers();
-  
   createDemoCustomers();
-  
   generateUsageMetrics();
-  
   generateChurnPredictions();
-  
   createSampleInterventions();
+  createCSMTasks();
   
   console.log(`✅ Database initialized with ${database.customers.length} customers`);
 }
@@ -80,7 +78,7 @@ function createDemoCustomers() {
       churn_risk_level: 'critical',
       total_users: 45,
       active_users_last_30_days: 12,
-      customer_success_manager: 'Sarah Johnson'
+      customer_success_manager: 'Customer Success Manager'
     },
     {
       company_name: 'ShelfSync Pro',
@@ -90,7 +88,7 @@ function createDemoCustomers() {
       churn_risk_level: 'low',
       total_users: 28,
       active_users_last_30_days: 26,
-      customer_success_manager: 'Mike Chen'
+      customer_success_manager: 'Customer Success Manager'
     },
     {
       company_name: 'PromoTracker Solutions',
@@ -110,7 +108,7 @@ function createDemoCustomers() {
       churn_risk_level: 'high',
       total_users: 67,
       active_users_last_30_days: 25,
-      customer_success_manager: 'David Kim'
+      customer_success_manager: 'Customer Success Manager'
     },
     {
       company_name: 'CategoryMaster',
@@ -120,7 +118,7 @@ function createDemoCustomers() {
       churn_risk_level: 'medium',
       total_users: 22,
       active_users_last_30_days: 18,
-      customer_success_manager: 'Lisa Thompson'
+      customer_success_manager: 'Customer Success Manager'
     },
     {
       company_name: 'FieldForce Mobile',
@@ -130,7 +128,7 @@ function createDemoCustomers() {
       churn_risk_level: 'low',
       total_users: 156,
       active_users_last_30_days: 142,
-      customer_success_manager: 'Sarah Johnson'
+      customer_success_manager: 'Customer Success Manager'
     },
     {
       company_name: 'PlanogramPro',
@@ -140,7 +138,7 @@ function createDemoCustomers() {
       churn_risk_level: 'medium',
       total_users: 43,
       active_users_last_30_days: 35,
-      customer_success_manager: 'Mike Chen'
+      customer_success_manager: 'Customer Success Manager'
     },
     {
       company_name: 'TradeSpend Optimizer',
@@ -377,6 +375,8 @@ function createKeyCustomerInterventions(customer: Customer, interventionTypes: r
     reason: string;
     outcome?: 'successful' | 'unsuccessful' | 'partial';
     status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+    success_probability?: number;
+    estimated_time_hours?: number;
   }
   
   const interventions: InterventionTemplate[] = [];
@@ -387,7 +387,7 @@ function createKeyCustomerInterventions(customer: Customer, interventionTypes: r
         { month: 3, type: 'call', reason: 'Usage declined 50% in last 30 days', outcome: 'partial' },
         { month: 7, type: 'meeting', reason: 'Champion departure detected', outcome: 'unsuccessful' },
         { month: 9, type: 'discount', reason: 'Payment failure detected', outcome: 'unsuccessful' },
-        { month: 11, type: 'meeting', reason: 'Health score dropped below 30', status: 'in_progress' }
+        { month: 11, type: 'meeting', reason: 'Executive escalation required', status: 'in_progress', success_probability: 35, estimated_time_hours: 8 }
       );
       break;
     
@@ -395,7 +395,7 @@ function createKeyCustomerInterventions(customer: Customer, interventionTypes: r
       interventions.push(
         { month: 2, type: 'feature_demo', reason: 'Expansion opportunity', outcome: 'successful' },
         { month: 6, type: 'training', reason: 'Expansion opportunity', outcome: 'successful' },
-        { month: 10, type: 'meeting', reason: 'Contract renewal approaching', outcome: 'successful' }
+        { month: 10, type: 'meeting', reason: 'Expansion opportunity development', status: 'in_progress', success_probability: 90, estimated_time_hours: 3 }
       );
       break;
     
@@ -413,14 +413,26 @@ function createKeyCustomerInterventions(customer: Customer, interventionTypes: r
         { month: 4, type: 'call', reason: 'Competitive threat identified', outcome: 'partial' },
         { month: 7, type: 'discount', reason: 'Usage declined 50% in last 30 days', outcome: 'unsuccessful' },
         { month: 9, type: 'meeting', reason: 'Payment failure detected', outcome: 'partial' },
-        { month: 11, type: 'call', reason: 'Health score dropped below 30', status: 'in_progress' }
+        { month: 11, type: 'meeting', reason: 'Payment recovery and value demonstration', status: 'in_progress', success_probability: 65, estimated_time_hours: 4 }
+      );
+      break;
+    
+    case 'CategoryMaster':
+      interventions.push(
+        { month: 11, type: 'training', reason: 'Feature adoption campaign', status: 'pending', success_probability: 80, estimated_time_hours: 3 }
+      );
+      break;
+    
+    case 'PlanogramPro':
+      interventions.push(
+        { month: 10, type: 'meeting', reason: 'Renewal preparation and negotiation', status: 'in_progress', success_probability: 75, estimated_time_hours: 2 }
       );
       break;
   }
   
   interventions.forEach(intv => {
     const createdDate = new Date(2024, intv.month, Math.floor(Math.random() * 28) + 1);
-    const completedDate = intv.status !== 'in_progress' ? new Date(createdDate.getTime() + Math.random() * 14 * 24 * 60 * 60 * 1000) : undefined;
+    const completedDate = intv.status !== 'in_progress' && intv.status !== 'pending' ? new Date(createdDate.getTime() + Math.random() * 14 * 24 * 60 * 60 * 1000) : undefined;
     
     const intervention: Intervention = {
       id: uuidv4(),
@@ -432,7 +444,9 @@ function createKeyCustomerInterventions(customer: Customer, interventionTypes: r
       created_date: createdDate,
       completed_date: completedDate,
       outcome: intv.outcome,
-      notes: `Strategic intervention for ${customer.company_name} - ${intv.reason}`
+      notes: `Strategic intervention for ${customer.company_name} - ${intv.reason}`,
+      success_probability: intv.success_probability,
+      estimated_time_hours: intv.estimated_time_hours
     };
     
     database.interventions.push(intervention);
@@ -474,4 +488,96 @@ function generateCompanyName(): string {
 function generateCompanySuffix(): string {
   const suffixes = ['Systems', 'Solutions', 'Technologies', 'Analytics', 'Platform', 'Hub', 'Pro', 'Suite', 'Tools', 'Software'];
   return suffixes[Math.floor(Math.random() * suffixes.length)];
+}
+
+function createCSMTasks() {
+  const csmCustomers = database.customers.filter(c => c.customer_success_manager === 'Customer Success Manager');
+  
+  const taskTemplates = [
+    {
+      customer_name: 'BrandFlow Analytics',
+      title: 'Follow up on BrandFlow Analytics CEO response',
+      description: 'Check if CEO has responded to executive escalation email and schedule follow-up call',
+      task_type: 'executive_communication' as const,
+      priority: 'critical' as const,
+      due_date: new Date(Date.now() + 2 * 60 * 60 * 1000),
+      estimated_time_hours: 0.5
+    },
+    {
+      customer_name: 'RetailEdge Systems',
+      title: 'Prepare RetailEdge Systems contract restructuring proposal',
+      description: 'Create detailed contract restructuring proposal with payment plan options and ROI analysis',
+      task_type: 'contract_management' as const,
+      priority: 'high' as const,
+      due_date: new Date(Date.now() + 4 * 60 * 60 * 1000),
+      estimated_time_hours: 2
+    },
+    {
+      customer_name: 'CategoryMaster',
+      title: 'Schedule and conduct CategoryMaster feature training session',
+      description: 'Set up personalized training session for advanced analytics features',
+      task_type: 'customer_training' as const,
+      priority: 'high' as const,
+      due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+      estimated_time_hours: 1.5
+    },
+    {
+      customer_name: 'PlanogramPro',
+      title: 'Complete PlanogramPro renewal proposal presentation',
+      description: 'Finalize renewal presentation with usage metrics and ROI calculations',
+      task_type: 'renewal_management' as const,
+      priority: 'high' as const,
+      due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      estimated_time_hours: 3
+    },
+    {
+      customer_name: 'ShelfSync Pro',
+      title: 'Review ShelfSync Pro pilot program results',
+      description: 'Analyze pilot program metrics and prepare expansion proposal',
+      task_type: 'expansion_management' as const,
+      priority: 'medium' as const,
+      due_date: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000),
+      estimated_time_hours: 1
+    },
+    {
+      customer_name: 'CategoryMaster',
+      title: 'Quarterly business review prep for CategoryMaster',
+      description: 'Prepare comprehensive QBR materials including health metrics and success stories',
+      task_type: 'relationship_management' as const,
+      priority: 'medium' as const,
+      due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      estimated_time_hours: 2
+    },
+    {
+      customer_name: 'FieldForce Mobile',
+      title: 'FieldForce Mobile case study interview scheduling',
+      description: 'Schedule interviews with key stakeholders for success story development',
+      task_type: 'success_story_development' as const,
+      priority: 'low' as const,
+      due_date: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+      estimated_time_hours: 0.75
+    }
+  ];
+  
+  taskTemplates.forEach(template => {
+    const customer = csmCustomers.find(c => c.company_name === template.customer_name);
+    if (customer) {
+      const task: Task = {
+        id: uuidv4(),
+        customer_id: customer.id,
+        assigned_to: 'Customer Success Manager',
+        title: template.title,
+        description: template.description,
+        task_type: template.task_type,
+        priority: template.priority,
+        status: 'pending',
+        due_date: template.due_date,
+        estimated_time_hours: template.estimated_time_hours,
+        created_at: new Date(),
+        updated_at: new Date()
+      };
+      
+      database.tasks.push(task);
+    }
+  });
 }
