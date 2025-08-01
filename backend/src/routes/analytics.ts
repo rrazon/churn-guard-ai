@@ -146,6 +146,62 @@ router.get('/revenue-at-risk', (req: AuthRequest, res) => {
   }
 });
 
+router.get('/csm-metrics', (req: AuthRequest, res) => {
+  try {
+    const { csm_name } = req.query;
+    const csmName = csm_name as string || 'Customer Success Manager';
+    
+    const assignedCustomers = database.customers.filter(c => c.customer_success_manager === csmName);
+    const csmInterventions = database.interventions.filter(i => i.assigned_to === csmName);
+    const csmTasks = database.tasks.filter(t => t.assigned_to === csmName);
+    
+    const totalARR = assignedCustomers.reduce((sum, c) => sum + c.mrr, 0) * 12;
+    const atRiskARR = assignedCustomers
+      .filter(c => c.churn_risk_level === 'high' || c.churn_risk_level === 'critical')
+      .reduce((sum, c) => sum + c.mrr, 0) * 12;
+    
+    const completedInterventions = csmInterventions.filter(i => i.status === 'completed');
+    const successfulInterventions = completedInterventions.filter(i => i.outcome === 'successful');
+    const interventionSuccessRate = completedInterventions.length > 0 
+      ? (successfulInterventions.length / completedInterventions.length) * 100 
+      : 0;
+    
+    const completedTasks = csmTasks.filter(t => t.status === 'completed');
+    const totalTasks = csmTasks.length;
+    const taskCompletionRate = totalTasks > 0 ? (completedTasks.length / totalTasks) * 100 : 0;
+    
+    const activeInterventions = csmInterventions.filter(i => i.status === 'in_progress' || i.status === 'pending');
+    const totalEstimatedHours = activeInterventions.reduce((sum, i) => sum + (i.estimated_time_hours || 0), 0) +
+                               csmTasks.filter(t => t.status !== 'completed').reduce((sum, t) => sum + t.estimated_time_hours, 0);
+    
+    const capacityUtilization = Math.min((totalEstimatedHours / 40) * 100, 100);
+    
+    const avgHealthScore = assignedCustomers.length > 0 
+      ? assignedCustomers.reduce((sum, c) => sum + c.health_score, 0) / assignedCustomers.length 
+      : 0;
+    
+    res.json({
+      customers_managed: assignedCustomers.length,
+      total_arr_responsibility: totalARR,
+      at_risk_arr: atRiskARR,
+      active_interventions: activeInterventions.length,
+      intervention_success_rate: Math.round(interventionSuccessRate),
+      task_completion_rate: Math.round(taskCompletionRate),
+      capacity_utilization: Math.round(capacityUtilization),
+      average_customer_health: Math.round(avgHealthScore),
+      tasks_pending: csmTasks.filter(t => t.status === 'pending').length,
+      tasks_in_progress: csmTasks.filter(t => t.status === 'in_progress').length,
+      tasks_completed_this_week: completedTasks.filter(t => {
+        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        return t.updated_at >= weekAgo;
+      }).length
+    });
+  } catch (error) {
+    console.error('Error fetching CSM metrics:', error);
+    res.status(500).json({ error: 'Failed to fetch CSM metrics' });
+  }
+});
+
 router.get('/intervention-effectiveness', (req: AuthRequest, res) => {
   try {
     const interventions = database.interventions;

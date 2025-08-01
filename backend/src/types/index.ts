@@ -66,6 +66,23 @@ export interface Intervention {
   completed_date?: Date;
   outcome?: 'successful' | 'unsuccessful' | 'partial';
   notes?: string;
+  success_probability?: number;
+  estimated_time_hours?: number;
+}
+
+export interface Task {
+  id: string;
+  customer_id: string;
+  assigned_to: string;
+  title: string;
+  description: string;
+  task_type: 'executive_communication' | 'contract_management' | 'customer_training' | 'renewal_management' | 'expansion_management' | 'relationship_management' | 'success_story_development';
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  due_date: Date;
+  estimated_time_hours: number;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface AuthRequest extends Request {

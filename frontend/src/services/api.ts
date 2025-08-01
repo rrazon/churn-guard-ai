@@ -153,6 +153,7 @@ class ApiService {
     limit?: number;
     status?: string;
     customer_id?: string;
+    assigned_to?: string;
   }) {
     const queryParams = new URLSearchParams();
     if (params) {
@@ -197,6 +198,48 @@ class ApiService {
 
   async getRecentAlerts() {
     return this.request<any>('/interventions/alerts/recent');
+  }
+
+  async getTasks(params?: { assigned_to?: string; status?: string; priority?: string; customer_id?: string; page?: number; limit?: number }) {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) {
+          queryParams.append(key, value.toString());
+        }
+      });
+    }
+    
+    const endpoint = `/tasks${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    return this.request<any>(endpoint);
+  }
+
+  async createTask(data: any) {
+    return this.request<any>('/tasks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateTask(id: string, data: any) {
+    return this.request<any>(`/tasks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTask(id: string) {
+    return this.request<any>(`/tasks/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getCSMMetrics(csmName?: string) {
+    const queryParams = new URLSearchParams();
+    if (csmName) queryParams.append('csm_name', csmName);
+    
+    const endpoint = `/analytics/csm-metrics${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    return this.request<any>(endpoint);
   }
 }
 
