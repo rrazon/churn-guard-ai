@@ -75,10 +75,10 @@ Use these pre-configured accounts to explore different user roles:
 
 | Role | Email | Password | Access Level |
 |------|-------|----------|--------------|
-| Admin | admin@churnguard.ai | password123 | Full access to all features |
-| Executive | executive@churnguard.ai | password123 | Dashboard and reports only |
-| CSM | csm@churnguard.ai | password123 | Customer management and interventions |
-| Read-only | readonly@churnguard.ai | password123 | View access only |
+| Admin | admin@teamcore.net | password123 | Full access to all features |
+| Executive | executive@teamcore.net | password123 | Dashboard and reports only |
+| CSM | csm@teamcore.net | password123 | Customer management and interventions |
+| Read-only | readonly@teamcore.net | password123 | View access only |
 
 ## 🐳 Docker Deployment
 

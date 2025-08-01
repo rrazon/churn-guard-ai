@@ -15,10 +15,10 @@ const LoginForm: React.FC = () => {
   const { login } = useAuth();
 
   const demoAccounts = [
-    { email: 'admin@churnguard.ai', role: 'Admin', description: 'Full access to all features' },
-    { email: 'executive@churnguard.ai', role: 'Executive', description: 'Dashboard and reports only' },
-    { email: 'csm@churnguard.ai', role: 'CSM', description: 'Customer management and interventions' },
-    { email: 'readonly@churnguard.ai', role: 'Read-only', description: 'View access only' },
+    { email: 'admin@teamcore.net', role: 'Admin', description: 'Full access to all features' },
+    { email: 'executive@teamcore.net', role: 'Executive', description: 'Dashboard and reports only' },
+    { email: 'csm@teamcore.net', role: 'CSM', description: 'Customer management and interventions' },
+    { email: 'readonly@teamcore.net', role: 'Read-only', description: 'View access only' },
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {
