@@ -37,6 +37,9 @@ import {
   Mail,
   MessageSquare,
 } from 'lucide-react';
+import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
+import { useAuth } from '../contexts/AuthContext';
 
 interface CustomerListProps {
   onCustomerSelect?: (customer: Customer) => void;
@@ -52,6 +55,12 @@ const CustomerList: React.FC<CustomerListProps> = ({ onCustomerSelect }) => {
   const [riskFilter, setRiskFilter] = useState<string>('all');
   const [industryFilter, setIndustryFilter] = useState<string>('all');
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0 });
+  const [interventionForm, setInterventionForm] = useState({
+    intervention_type: '',
+    trigger_reason: '',
+    notes: '',
+  });
+  const { user } = useAuth();
 
   useEffect(() => {
     loadCustomers();
@@ -126,6 +135,30 @@ const CustomerList: React.FC<CustomerListProps> = ({ onCustomerSelect }) => {
     await loadCustomerDetails(customer);
     if (onCustomerSelect) {
       onCustomerSelect(customer);
+    }
+  };
+
+  const handleCreateIntervention = async () => {
+    if (!selectedCustomer || !interventionForm.intervention_type || !interventionForm.trigger_reason) {
+      return;
+    }
+
+    try {
+      await apiService.createIntervention({
+        customer_id: selectedCustomer.id,
+        intervention_type: interventionForm.intervention_type,
+        trigger_reason: interventionForm.trigger_reason,
+        assigned_to: user?.name || 'Customer Success Manager',
+        notes: interventionForm.notes,
+      });
+
+      setInterventionForm({
+        intervention_type: '',
+        trigger_reason: '',
+        notes: '',
+      });
+    } catch (error) {
+      console.error('Failed to create intervention:', error);
     }
   };
 
@@ -256,7 +289,12 @@ const CustomerList: React.FC<CustomerListProps> = ({ onCustomerSelect }) => {
                           customer.health_score >= 60 ? 'bg-yellow-500' :
                           customer.health_score >= 40 ? 'bg-orange-500' : 'bg-red-500'
                         }`} />
-                        <span>{customer.company_name}</span>
+                        <span 
+                          className="cursor-pointer hover:text-blue-600 hover:underline"
+                          onClick={() => handleCustomerClick(customer)}
+                        >
+                          {customer.company_name}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell>{customer.industry}</TableCell>
@@ -369,10 +407,64 @@ const CustomerList: React.FC<CustomerListProps> = ({ onCustomerSelect }) => {
                                     <Mail className="h-4 w-4 mr-2" />
                                     Send Email
                                   </Button>
-                                  <Button size="sm" variant="outline">
-                                    <MessageSquare className="h-4 w-4 mr-2" />
-                                    Create Intervention
-                                  </Button>
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <Button size="sm" variant="outline">
+                                        <MessageSquare className="h-4 w-4 mr-2" />
+                                        Create Intervention
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                      <DialogHeader>
+                                        <DialogTitle>Create Intervention</DialogTitle>
+                                        <DialogDescription>
+                                          Create a new intervention for {selectedCustomer?.company_name}
+                                        </DialogDescription>
+                                      </DialogHeader>
+                                      <div className="space-y-4">
+                                        <div>
+                                          <Label htmlFor="intervention_type">Intervention Type</Label>
+                                          <Select 
+                                            value={interventionForm.intervention_type}
+                                            onValueChange={(value) => setInterventionForm(prev => ({ ...prev, intervention_type: value }))}
+                                          >
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Select intervention type" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="call">Phone Call</SelectItem>
+                                              <SelectItem value="email">Email</SelectItem>
+                                              <SelectItem value="meeting">Meeting</SelectItem>
+                                              <SelectItem value="training">Training Session</SelectItem>
+                                              <SelectItem value="discount">Discount Offer</SelectItem>
+                                              <SelectItem value="feature_demo">Feature Demo</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        <div>
+                                          <Label htmlFor="trigger_reason">Trigger Reason</Label>
+                                          <Input
+                                            id="trigger_reason"
+                                            value={interventionForm.trigger_reason}
+                                            onChange={(e) => setInterventionForm(prev => ({ ...prev, trigger_reason: e.target.value }))}
+                                            placeholder="e.g., Health score drop, Low usage"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label htmlFor="notes">Notes</Label>
+                                          <Textarea
+                                            id="notes"
+                                            value={interventionForm.notes}
+                                            onChange={(e) => setInterventionForm(prev => ({ ...prev, notes: e.target.value }))}
+                                            placeholder="Additional notes or context..."
+                                          />
+                                        </div>
+                                        <Button onClick={handleCreateIntervention} className="w-full">
+                                          Create Intervention
+                                        </Button>
+                                      </div>
+                                    </DialogContent>
+                                  </Dialog>
                                 </div>
                               </TabsContent>
                               
