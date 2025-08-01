@@ -24,14 +24,10 @@ import {
 } from 'recharts';
 import {
   TrendingUp,
-  TrendingDown,
-  Users,
   DollarSign,
   AlertTriangle,
   Target,
   Activity,
-  ArrowUpRight,
-  ArrowDownRight,
 } from 'lucide-react';
 import { DashboardMetrics } from '../types';
 

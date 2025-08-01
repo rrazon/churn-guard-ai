@@ -39,9 +39,6 @@ import {
   Mail,
   MessageSquare,
   Target,
-  Clock,
-  CheckCircle,
-  AlertTriangle
 } from 'lucide-react';
 
 const CSMDashboard: React.FC = () => {
@@ -51,7 +48,6 @@ const CSMDashboard: React.FC = () => {
   const [tasks, setTasks] = useState<any[]>([]);
   const [csmMetrics, setCsmMetrics] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('customers');
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [interventionForm, setInterventionForm] = useState({
     intervention_type: '',
@@ -181,9 +177,6 @@ const CSMDashboard: React.FC = () => {
     c.churn_risk_level === 'high' || c.churn_risk_level === 'critical'
   );
   const totalARR = csmMetrics?.total_arr_responsibility || assignedCustomers.reduce((sum, c) => sum + (c.mrr * 12), 0);
-  const avgHealthScore = csmMetrics?.average_customer_health || (assignedCustomers.length > 0 
-    ? Math.round(assignedCustomers.reduce((sum, c) => sum + c.health_score, 0) / assignedCustomers.length)
-    : 0);
   const activeInterventions = csmMetrics?.active_interventions || interventions.filter(i => i.status === 'in_progress').length;
   const interventionSuccessRate = csmMetrics?.intervention_success_rate || 87;
 
