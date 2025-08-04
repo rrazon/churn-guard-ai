@@ -1,9 +1,12 @@
 import { WebSocketServer, WebSocket } from 'ws';
+import jwt from 'jsonwebtoken';
 import { database } from './database';
+import { auditLogger } from './auditLogger';
 
 interface ClientConnection {
   ws: WebSocket;
   userId?: string;
+  authenticated: boolean;
   subscriptions: string[];
 }
 
@@ -17,6 +20,7 @@ export function setupWebSocket(wss: WebSocketServer) {
     
     const client: ClientConnection = {
       ws,
+      authenticated: false,
       subscriptions: []
     };
     clients.push(client);
@@ -52,15 +56,74 @@ export function setupWebSocket(wss: WebSocketServer) {
 function handleClientMessage(client: ClientConnection, message: any) {
   switch (message.type) {
     case 'authenticate':
-      client.userId = message.userId;
-      client.ws.send(JSON.stringify({
-        type: 'authenticated',
-        userId: message.userId,
-        timestamp: new Date().toISOString()
-      }));
+      if (!message.token) {
+        client.ws.send(JSON.stringify({
+          type: 'error',
+          message: 'Authentication token required',
+          timestamp: new Date().toISOString()
+        }));
+        return;
+      }
+
+      try {
+        const JWT_SECRET = process.env.JWT_SECRET || (() => {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('JWT_SECRET environment variable is required in production');
+          }
+          return 'churn-guard-ai-secret-key-demo';
+        })();
+
+        const decoded = jwt.verify(message.token, JWT_SECRET) as any;
+        const user = database.users.find(u => u.id === decoded.userId);
+        
+        if (!user) {
+          client.ws.send(JSON.stringify({
+            type: 'error',
+            message: 'Invalid user',
+            timestamp: new Date().toISOString()
+          }));
+          return;
+        }
+
+        client.userId = user.id;
+        client.authenticated = true;
+        
+        auditLogger.log({
+          userId: user.id,
+          action: 'WEBSOCKET_AUTHENTICATED',
+          success: true
+        });
+
+        client.ws.send(JSON.stringify({
+          type: 'authenticated',
+          userId: user.id,
+          timestamp: new Date().toISOString()
+        }));
+      } catch (error) {
+        auditLogger.log({
+          action: 'WEBSOCKET_AUTH_FAILED',
+          success: false,
+          details: { error: error instanceof Error ? error.message : 'Unknown error' }
+        });
+        
+        client.ws.send(JSON.stringify({
+          type: 'error',
+          message: 'Authentication failed',
+          timestamp: new Date().toISOString()
+        }));
+      }
       break;
 
     case 'subscribe':
+      if (!client.authenticated) {
+        client.ws.send(JSON.stringify({
+          type: 'error',
+          message: 'Authentication required',
+          timestamp: new Date().toISOString()
+        }));
+        return;
+      }
+
       if (message.channel && !client.subscriptions.includes(message.channel)) {
         client.subscriptions.push(message.channel);
         client.ws.send(JSON.stringify({
@@ -72,6 +135,15 @@ function handleClientMessage(client: ClientConnection, message: any) {
       break;
 
     case 'unsubscribe':
+      if (!client.authenticated) {
+        client.ws.send(JSON.stringify({
+          type: 'error',
+          message: 'Authentication required',
+          timestamp: new Date().toISOString()
+        }));
+        return;
+      }
+
       if (message.channel) {
         const index = client.subscriptions.indexOf(message.channel);
         if (index > -1) {
@@ -192,7 +264,7 @@ function broadcastToSubscribers(channel: string, data: any) {
   const message = JSON.stringify(data);
   
   clients.forEach(client => {
-    if (client.subscriptions.includes(channel) && client.ws.readyState === WebSocket.OPEN) {
+    if (client.authenticated && client.subscriptions.includes(channel) && client.ws.readyState === WebSocket.OPEN) {
       try {
         client.ws.send(message);
       } catch (error) {

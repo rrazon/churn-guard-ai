@@ -2,6 +2,9 @@ import express from 'express';
 import { database } from '../services/database';
 import { AuthRequest } from '../middleware/auth';
 import { v4 as uuidv4 } from 'uuid';
+import { validateRequest } from '../middleware/validation';
+import { strictRateLimit } from '../middleware/security';
+import { auditLogger } from '../services/auditLogger';
 
 const router = express.Router();
 
@@ -71,7 +74,13 @@ router.get('/', (req: AuthRequest, res) => {
   }
 });
 
-router.post('/', (req: AuthRequest, res) => {
+router.post('/', strictRateLimit, validateRequest([
+  { field: 'customer_id', required: true, type: 'uuid' },
+  { field: 'intervention_type', required: true, type: 'string', enum: ['call', 'email', 'meeting', 'training', 'discount', 'feature_demo'] },
+  { field: 'trigger_reason', required: true, type: 'string', maxLength: 500, sanitize: true },
+  { field: 'assigned_to', type: 'string', maxLength: 100, sanitize: true },
+  { field: 'notes', type: 'string', maxLength: 1000, sanitize: true }
+]), (req: AuthRequest, res) => {
   try {
     const {
       customer_id,
@@ -79,24 +88,11 @@ router.post('/', (req: AuthRequest, res) => {
       trigger_reason,
       assigned_to,
       notes
-    } = req.body;
-
-    if (!customer_id || !intervention_type || !trigger_reason) {
-      return res.status(400).json({ 
-        error: 'customer_id, intervention_type, and trigger_reason are required' 
-      });
-    }
+    } = req.validatedData;
 
     const customer = database.customers.find(c => c.id === customer_id);
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found' });
-    }
-
-    const validTypes = ['call', 'email', 'meeting', 'training', 'discount', 'feature_demo'];
-    if (!validTypes.includes(intervention_type)) {
-      return res.status(400).json({ 
-        error: 'Invalid intervention_type. Must be one of: ' + validTypes.join(', ') 
-      });
     }
 
     const newIntervention = {
@@ -111,6 +107,19 @@ router.post('/', (req: AuthRequest, res) => {
     };
 
     database.interventions.push(newIntervention);
+
+    auditLogger.log({
+      userId: req.user?.id,
+      action: 'INTERVENTION_CREATED',
+      resource: `intervention:${newIntervention.id}`,
+      ip: req.ip,
+      success: true,
+      details: {
+        interventionId: newIntervention.id,
+        customerId: customer_id,
+        type: intervention_type
+      }
+    });
 
     res.status(201).json({
       intervention: newIntervention,

@@ -2,19 +2,76 @@ const API_BASE_URL = 'http://localhost:8000/api';
 
 class ApiService {
   private token: string | null = null;
+  private refreshToken: string | null = null;
+  private refreshPromise: Promise<void> | null = null;
 
   constructor() {
     this.token = localStorage.getItem('auth_token');
+    this.refreshToken = localStorage.getItem('refresh_token');
   }
 
-  setToken(token: string) {
+  setToken(token: string, refreshToken?: string) {
     this.token = token;
     localStorage.setItem('auth_token', token);
+    
+    if (refreshToken) {
+      this.refreshToken = refreshToken;
+      localStorage.setItem('refresh_token', refreshToken);
+    }
   }
 
   clearToken() {
     this.token = null;
+    this.refreshToken = null;
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('refresh_token');
+  }
+
+  private sanitizeInput(input: any): any {
+    if (typeof input === 'string') {
+      return input.replace(/[<>'"]/g, '');
+    }
+    if (typeof input === 'object' && input !== null) {
+      const sanitized: any = {};
+      for (const key in input) {
+        sanitized[key] = this.sanitizeInput(input[key]);
+      }
+      return sanitized;
+    }
+    return input;
+  }
+
+  private async refreshAccessToken(): Promise<void> {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    if (!this.refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    this.refreshPromise = (async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ refreshToken: this.refreshToken }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Token refresh failed');
+        }
+
+        const data = await response.json();
+        this.setToken(data.token, data.refreshToken);
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
   }
 
   private async request<T>(
@@ -31,10 +88,33 @@ class ApiService {
       headers.Authorization = `Bearer ${this.token}`;
     }
 
-    const response = await fetch(url, {
+    if (options.body && typeof options.body === 'string') {
+      try {
+        const parsedBody = JSON.parse(options.body);
+        const sanitizedBody = this.sanitizeInput(parsedBody);
+        options.body = JSON.stringify(sanitizedBody);
+      } catch (e) {
+      }
+    }
+
+    let response = await fetch(url, {
       ...options,
       headers,
     });
+
+    if (response.status === 401 && this.refreshToken && endpoint !== '/auth/refresh') {
+      try {
+        await this.refreshAccessToken();
+        headers.Authorization = `Bearer ${this.token}`;
+        response = await fetch(url, {
+          ...options,
+          headers,
+        });
+      } catch (refreshError) {
+        this.clearToken();
+        throw new Error('Authentication failed');
+      }
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -45,13 +125,13 @@ class ApiService {
   }
 
   async login(email: string, password: string) {
-    const response = await this.request<{ token: string; user: any }>('/auth/login', {
+    const response = await this.request<{ token: string; refreshToken: string; user: any }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
     
     if (response.token) {
-      this.setToken(response.token);
+      this.setToken(response.token, response.refreshToken);
     }
     
     return response;
