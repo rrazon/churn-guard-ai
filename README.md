@@ -174,12 +174,40 @@ Simple but effective ML model features:
 
 ## 🔒 Security Features
 
-- JWT tokens with 24-hour expiration and refresh tokens
-- Role-based route protection on frontend and API endpoints
-- Input validation and sanitization for all endpoints
-- Rate limiting on API endpoints
-- CORS configuration for secure browser access
-- Password hashing with bcrypt
+- **Authentication & Session Management**
+  - JWT tokens with 1-hour expiration and 7-day refresh tokens
+  - Environment-based JWT secrets (required in production)
+  - Secure session management with httpOnly cookies
+  - Comprehensive audit logging for all authentication events
+
+- **Input Validation & Injection Protection**
+  - Comprehensive input validation middleware with type checking
+  - XSS prevention through input sanitization and output encoding
+  - Search query sanitization to prevent injection attacks
+  - Strict validation rules for all API endpoints
+
+- **API Security**
+  - Multi-tier rate limiting (auth: 5/15min, general: 100/15min, strict: 20/15min)
+  - CORS configuration with environment-based origin whitelist
+  - Comprehensive security headers (CSP, X-Frame-Options, etc.)
+  - Request size limits and method restrictions
+
+- **Data Encryption & Storage Security**
+  - AES-256-GCM encryption for sensitive data at rest
+  - bcrypt password hashing with configurable salt rounds
+  - Environment-based encryption key management
+  - Secure audit logging with automatic rotation
+
+- **XSS & CSRF Protection**
+  - Strict Content Security Policy preventing script injection
+  - CSRF token validation for state-changing operations
+  - DOM purification on client-side inputs
+  - SameSite cookie attributes for additional protection
+
+- **WebSocket Security**
+  - JWT authentication required for WebSocket connections
+  - Subscription-based authorization for real-time updates
+  - Connection logging and monitoring
 
 ## 📈 Performance Optimizations
 

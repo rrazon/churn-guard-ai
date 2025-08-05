@@ -3,7 +3,12 @@ import jwt from 'jsonwebtoken';
 import { database } from '../services/database';
 import { User } from '../types';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'churn-guard-ai-secret-key-demo';
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable is required in production');
+  }
+  return 'churn-guard-ai-secret-key-demo';
+})();
 
 export interface AuthRequest extends Request {
   user?: User;
@@ -47,5 +52,21 @@ export function requireRole(roles: string[]) {
 }
 
 export function generateToken(userId: string): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '24h' });
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1h' });
+}
+
+export function generateRefreshToken(userId: string): string {
+  return jwt.sign({ userId, type: 'refresh' }, JWT_SECRET, { expiresIn: '7d' });
+}
+
+export function verifyRefreshToken(token: string): { userId: string } | null {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    if (decoded.type !== 'refresh') {
+      return null;
+    }
+    return { userId: decoded.userId };
+  } catch (error) {
+    return null;
+  }
 }

@@ -2,10 +2,21 @@ import express from 'express';
 import { database } from '../services/database';
 import { AuthRequest } from '../middleware/auth';
 import { calculateHealthScore } from '../services/healthScore';
+import { validateRequest, sanitizeSearchQuery } from '../middleware/validation';
+import { strictRateLimit } from '../middleware/security';
+import { auditLogger } from '../services/auditLogger';
 
 const router = express.Router();
 
-router.get('/', (req: AuthRequest, res) => {
+router.get('/', validateRequest([
+  { field: 'risk_level', type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
+  { field: 'industry', type: 'string', maxLength: 100, sanitize: true },
+  { field: 'mrr_min', type: 'number', min: 0 },
+  { field: 'mrr_max', type: 'number', min: 0 },
+  { field: 'search', type: 'string', maxLength: 100, sanitize: true },
+  { field: 'page', type: 'number', min: 1, max: 1000 },
+  { field: 'limit', type: 'number', min: 1, max: 100 }
+]), (req: AuthRequest, res) => {
   try {
     const { 
       risk_level, 
@@ -36,12 +47,14 @@ router.get('/', (req: AuthRequest, res) => {
     }
 
     if (search) {
-      const searchTerm = (search as string).toLowerCase();
-      customers = customers.filter(c => 
-        c.company_name.toLowerCase().includes(searchTerm) ||
-        c.industry.toLowerCase().includes(searchTerm) ||
-        c.customer_success_manager.toLowerCase().includes(searchTerm)
-      );
+      const searchTerm = sanitizeSearchQuery(search as string).toLowerCase();
+      if (searchTerm) {
+        customers = customers.filter(c => 
+          c.company_name.toLowerCase().includes(searchTerm) ||
+          c.industry.toLowerCase().includes(searchTerm) ||
+          c.customer_success_manager.toLowerCase().includes(searchTerm)
+        );
+      }
     }
 
     customers.sort((a, b) => a.health_score - b.health_score);
@@ -147,12 +160,24 @@ router.get('/:id/health-history', (req: AuthRequest, res) => {
   }
 });
 
-router.put('/:id/health', (req: AuthRequest, res) => {
+router.put('/:id/health', strictRateLimit, validateRequest([
+  { field: 'id', required: true, type: 'uuid' },
+  { field: 'health_score', required: true, type: 'number', min: 0, max: 100 },
+  { field: 'notes', type: 'string', maxLength: 1000, sanitize: true }
+]), (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
-    const { health_score, notes } = req.body;
+    const { id } = req.validatedData;
+    const { health_score, notes } = req.validatedData;
 
     if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'csm')) {
+      auditLogger.log({
+        userId: req.user?.id,
+        action: 'HEALTH_SCORE_UPDATE_DENIED',
+        resource: `customer:${id}`,
+        ip: req.ip,
+        success: false,
+        details: { reason: 'Insufficient permissions' }
+      });
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
 
@@ -161,10 +186,7 @@ router.put('/:id/health', (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    if (health_score < 0 || health_score > 100) {
-      return res.status(400).json({ error: 'Health score must be between 0 and 100' });
-    }
-
+    const oldScore = customer.health_score;
     customer.health_score = health_score;
     customer.updated_at = new Date();
 
@@ -172,6 +194,20 @@ router.put('/:id/health', (req: AuthRequest, res) => {
     else if (health_score >= 50) customer.churn_risk_level = 'medium';
     else if (health_score >= 20) customer.churn_risk_level = 'high';
     else customer.churn_risk_level = 'critical';
+
+    auditLogger.log({
+      userId: req.user.id,
+      action: 'HEALTH_SCORE_UPDATED',
+      resource: `customer:${id}`,
+      ip: req.ip,
+      success: true,
+      details: { 
+        customerId: id,
+        oldScore,
+        newScore: health_score,
+        notes 
+      }
+    });
 
     res.json({ 
       customer,
