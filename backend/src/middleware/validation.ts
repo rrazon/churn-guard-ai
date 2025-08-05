@@ -20,7 +20,9 @@ export function validateRequest(rules: ValidationRule[]) {
     const sanitizedData: any = {};
 
     for (const rule of rules) {
-      const value = req.body[rule.field] || req.query[rule.field] || req.params[rule.field];
+      const value = (req.body && req.body[rule.field]) || 
+                   (req.query && req.query[rule.field]) || 
+                   (req.params && req.params[rule.field]);
 
       if (rule.required && (value === undefined || value === null || value === '')) {
         errors.push(`${rule.field} is required`);
